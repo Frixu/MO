@@ -1,174 +1,155 @@
 #include <iostream>
+#include <vector>
 #include <cmath>
+#include <algorithm>
 #include <iomanip>
 
 using namespace std;
 
-// Funkcje do rozwiązania z zadania 1 (POPRAWIONE)
-double equation1a(double x) {
-    return tanh(x) + 2 * x - 2;
-}
-
-double equation1b(double x) {
-    return sinh(x) + x / 4.0 - 1;
-}
-
-// Pochodne funkcji (POPRAWIONE)
-double derivative1a(double x) {
-    return 1.0 / (cosh(x) * cosh(x)) + 2;
-}
-
-double derivative1b(double x) {
-    return cosh(x) + 1.0 / 4.0;
-}
-
-// Metoda Picarda
-void picard(double (*f)(double), double x0, double tol, int max_iter) {
-    cout << "Metoda Picarda:\n";
-    cout << "Iteracja | x_i         | f(x_i)      | Residuum    | Blad\n";
-    cout << "--------------------------------------------------------\n";
-
-    double x = x0;
-    for (int i = 0; i < max_iter; ++i) {
-        double x_new = x - f(x); // Picard iteration: x_{n+1} = x_n - f(x_n)
-        double residual = fabs(f(x_new));
-        double error = fabs(x_new - x);
-
-        cout << setw(8) << i << " | " << setw(12) << x_new << " | " << setw(12) << f(x_new)
-            << " | " << setw(12) << residual << " | " << setw(12) << error << endl;
-
-        if (error < tol || residual < tol) {
-            cout << "Zbieżność osiągnięta po " << i + 1 << " iteracjach.\n";
-            return;
-        }
-        x = x_new;
+void printValue(double val) {
+    if (val == floor(val)) {
+        cout << setw(10) << static_cast<int>(val);
     }
-    cout << "Osiągnięto maksymalną liczbę iteracji bez zbieżności.\n";
+    else {
+        cout << setw(10) << val;
+    }
 }
 
-// Metoda bisekcji
-void bisection(double (*f)(double), double a, double b, double tol, int max_iter) {
-    cout << "Metoda bisekcji:\n";
-    cout << "Iteracja | a          | b          | x_i        | f(x_i)     | Residuum    | Blad\n";
-    cout << "-------------------------------------------------------------------------------\n";
+void printMatrix(const vector<vector<double>>& matrix, const string& name) {
+    cout << "--- " << name << " ---" << endl;
+    for (const auto& row : matrix) {
+        for (double val : row) {
+            printValue(val);
+        }
+        cout << endl;
+    }
+}
 
-    if (f(a) * f(b) >= 0) {
-        cout << "Nieprawidłowy przedział [a, b].\n";
-        return;
+void printVector(const vector<double>& vec, const string& name) {
+    cout << "--- " << name << " ---" << endl;
+    for (double val : vec) {
+        printValue(val);
+    }
+    cout << endl;
+}
+
+void LUDecompositionWithPartialPivoting(vector<vector<double>>& A, vector<int>& pivot) {
+    int n = A.size();
+    pivot.resize(n);
+
+    for (int i = 0; i < n; ++i) {//wektor permutacji
+        pivot[i] = i;
     }
 
-    double x = a;
-    for (int i = 0; i < max_iter; ++i) {
-        x = (a + b) / 2;
-        double residual = fabs(f(x));
-        double error = (b - a) / 2;
+    for (int k = 0; k < n; ++k) {
+        int max_row = k;
+        double max_val = abs(A[k][k]);
 
-        cout << setw(8) << i << " | " << setw(12) << a << " | " << setw(12) << b << " | " << setw(12) << x
-            << " | " << setw(12) << f(x) << " | " << setw(12) << residual << " | " << setw(12) << error << endl;
-
-        if (residual < tol || error < tol) {
-            cout << "Zbieżność osiągnięta po " << i + 1 << " iteracjach.\n";
-            return;
+        for (int i = k + 1; i < n; ++i) {//znajdujemy maksymalny element
+            if (abs(A[i][k]) > max_val) {
+                max_val = abs(A[i][k]);
+                max_row = i;
+            }
         }
 
-        if (f(a) * f(x) < 0) {
-            b = x;
+        if (max_row != k) {//zamieniamy wiersze jesli trzeba
+            swap(A[k], A[max_row]);
+            swap(pivot[k], pivot[max_row]);
         }
-        else {
-            a = x;
+
+        for (int i = k + 1; i < n; ++i) { //eliminacja gaussa
+            A[i][k] /= A[k][k]; //obliczamy mnoznik
+            for (int j = k + 1; j < n; ++j) {
+                A[i][j] -= A[i][k] * A[k][j];//aktualizujemy podmacierz
+            }
         }
     }
-    cout << "Osiągnięto maksymalną liczbę iteracji bez zbieżności.\n";
 }
 
-// Metoda Newtona
-void newton(double (*f)(double), double (*df)(double), double x0, double tol, int max_iter) {
-    cout << "Metoda Newtona:\n";
-    cout << "Iteracja | x_i         | f(x_i)      | Residuum    | Blad\n";
-    cout << "--------------------------------------------------------\n";
+vector<double> SolveWithLU(const vector<vector<double>>& LU, const vector<int>& pivot, const vector<double>& b) {
+    int n = LU.size();
+    vector<double> x(n), y(n);
 
-    double x = x0;
-    for (int i = 0; i < max_iter; ++i) {
-        double fx = f(x);
-        double dfx = df(x);
-        if (dfx == 0) {
-            cout << "Pochodna zerowa. Metoda nie może być kontynuowana.\n";
-            return;
-        }
-        double x_new = x - fx / dfx;
-        double residual = fabs(f(x_new));
-        double error = fabs(x_new - x);
-
-        cout << setw(8) << i << " | " << setw(12) << x_new << " | " << setw(12) << f(x_new)
-            << " | " << setw(12) << residual << " | " << setw(12) << error << endl;
-
-        if (error < tol || residual < tol) {
-            cout << "Zbieżność osiągnięta po " << i + 1 << " iteracjach.\n";
-            return;
-        }
-        x = x_new;
+    vector<double> pb(n);
+    for (int i = 0; i < n; ++i) {
+        pb[i] = b[pivot[i]];//permutacja wektora b
     }
-    cout << "Osiągnięto maksymalną liczbę iteracji bez zbieżności.\n";
+
+    for (int i = 0; i < n; ++i) {
+        y[i] = pb[i];
+        for (int j = 0; j < i; ++j) {//Ly = pb
+            y[i] -= LU[i][j] * y[j];
+        }
+    }
+
+    for (int i = n - 1; i >= 0; --i) {
+        x[i] = y[i];
+        for (int j = i + 1; j < n; ++j) {//Ux = y
+            x[i] -= LU[i][j] * x[j];
+        }
+        x[i] /= LU[i][i];
+    }
+
+    return x;
 }
 
-// Metoda siecznych
-void secant(double (*f)(double), double x0, double x1, double tol, int max_iter) {
-    cout << "Metoda siecznych:\n";
-    cout << "Iteracja | x_i         | f(x_i)      | Residuum    | Blad\n";
-    cout << "--------------------------------------------------------\n";
+void extractLandU(const vector<vector<double>>& LU, vector<vector<double>>& L, vector<vector<double>>& U) {
+    int n = LU.size();
+    L.assign(n, vector<double>(n, 0.0));
+    U.assign(n, vector<double>(n, 0.0));
 
-    double x_prev = x0;
-    double x_curr = x1;
-    for (int i = 0; i < max_iter; ++i) {
-        double fx_prev = f(x_prev);
-        double fx_curr = f(x_curr);
-        if (fx_prev == fx_curr) {
-            cout << "Dzielenie przez zero. Metoda nie może być kontynuowana.\n";
-            return;
+    for (int i = 0; i < n; ++i) { //rozdziela macierz na L i U
+        L[i][i] = 1.0;
+        for (int j = 0; j < i; ++j) {
+            L[i][j] = LU[i][j];
         }
-        double x_next = x_curr - fx_curr * (x_curr - x_prev) / (fx_curr - fx_prev);
-        double residual = fabs(f(x_next));
-        double error = fabs(x_next - x_curr);
-
-        cout << setw(8) << i << " | " << setw(12) << x_next << " | " << setw(12) << f(x_next)
-            << " | " << setw(12) << residual << " | " << setw(12) << error << endl;
-
-        if (error < tol || residual < tol) {
-            cout << "Zbieżność osiągnięta po " << i + 1 << " iteracjach.\n";
-            return;
+        for (int j = i; j < n; ++j) {
+            U[i][j] = LU[i][j];
         }
-        x_prev = x_curr;
-        x_curr = x_next;
     }
-    cout << "Osiągnięto maksymalną liczbę iteracji bez zbieżności.\n";
 }
 
 int main() {
-    double tol = 1e-6;
-    int max_iter = 100;
+    cout << fixed;
 
-    // Zadanie 1a: tanh(x) + 2x - 2 = 0
-    cout << "Rozwiązywanie równania 1a: tanh(x) + 2x - 2 = 0\n";
-    cout << "------------------------------------------------\n";
-    picard(equation1a, 0.5, tol, max_iter);
-    cout << "\n";
-    bisection(equation1a, 0.0, 1.0, tol, max_iter);
-    cout << "\n";
-    newton(equation1a, derivative1a, 0.5, tol, max_iter);
-    cout << "\n";
-    secant(equation1a, 0.0, 1.0, tol, max_iter);
-    cout << "\n";
+    // Dane wejściowe z przykładu
+    vector<vector<double>> A = {
+        {5, 4, 3, 2, 1},
+        {10, 8, 7, 6, 5},
+        {-1, 2, -3, 4, -5},
+        {6, 5, -4, 3, -2},
+        {1, 2, 3, 4, 5}
+    };
 
-    // Zadanie 1b: sinh(x) + x/4 - 1 = 0
-    cout << "Rozwiązywanie równania 1b: sinh(x) + x/4 - 1 = 0\n";
-    cout << "------------------------------------------------\n";
-    picard(equation1b, 0.5, tol, max_iter);
-    cout << "\n";
-    bisection(equation1b, 0.0, 1.0, tol, max_iter);
-    cout << "\n";
-    newton(equation1b, derivative1b, 0.5, tol, max_iter);
-    cout << "\n";
-    secant(equation1b, 0.0, 1.0, tol, max_iter);
+    vector<double> b = { 37, 99, -9, 12, 53 };
+
+    vector<vector<double>> A_copy = A;
+    vector<double> b_copy = b;
+
+        cout << "ROZWIAZANIE ===" << endl;
+        printMatrix(A, "MATRIX A");
+        printVector(b, "VECTOR B");
+
+        vector<int> pivot;
+        LUDecompositionWithPartialPivoting(A, pivot);
+
+        vector<vector<double>> L, U;
+        extractLandU(A, L, U);
+
+        printMatrix(L, "MATRIX L");
+        printMatrix(U, "MATRIX U");
+
+        cout << "--- PERMUTATION VECTOR ---" << endl;
+        for (int val : pivot) {
+            cout << setw(10) << val;
+        }
+        cout << endl;
+
+        vector<double> y = SolveWithLU(A, pivot, b_copy);
+        printVector(y, "VECTOR Y");
+
+        vector<double> x = SolveWithLU(A, pivot, b_copy);
+        printVector(x, "VECTOR X");
 
     return 0;
 }
