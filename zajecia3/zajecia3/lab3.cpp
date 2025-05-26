@@ -1,155 +1,115 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
-#include <algorithm>
 #include <iomanip>
+#include <fstream>
 
 using namespace std;
 
-void printValue(double val) {
-    if (val == floor(val)) {
-        cout << setw(10) << static_cast<int>(val);
-    }
-    else {
-        cout << setw(10) << val;
-    }
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+double f(double x) {
+    return 1.0 / (1.0 + pow(x, 3));
 }
 
-void printMatrix(const vector<vector<double>>& matrix, const string& name) {
-    cout << "--- " << name << " ---" << endl;
-    for (const auto& row : matrix) {
-        for (double val : row) {
-            printValue(val);
-        }
-        cout << endl;
+// Generowanie węzłów równoodległych na przedziale [a, b]
+vector<double> rownoodlegle_wezly(int n, double a, double b) {
+    vector<double> wezly(n + 1);
+    double h = (b - a) / n;
+    for (int i = 0; i <= n; ++i) {
+        wezly[i] = a + i * h;
     }
+    return wezly;
 }
 
-void printVector(const vector<double>& vec, const string& name) {
-    cout << "--- " << name << " ---" << endl;
-    for (double val : vec) {
-        printValue(val);
+// Generowanie węzłów Czebyszewa na przedziale [a, b]
+vector<double> czebyszew_wezly(int n, double a, double b) {
+    vector<double> wezly(n + 1);
+    for (int i = 0; i <= n; ++i) {
+        double theta = (2 * i + 1) * M_PI / (2 * (n + 1));
+        wezly[i] = (a + b) / 2 + (b - a) / 2 * cos(theta); // skalowanie na [a, b]
     }
-    cout << endl;
+    return wezly;
 }
 
-void LUDecompositionWithPartialPivoting(vector<vector<double>>& A, vector<int>& pivot) {
-    int n = A.size();
-    pivot.resize(n);
-
-    for (int i = 0; i < n; ++i) {//wektor permutacji
-        pivot[i] = i;
-    }
-
-    for (int k = 0; k < n; ++k) {
-        int max_row = k;
-        double max_val = abs(A[k][k]);
-
-        for (int i = k + 1; i < n; ++i) {//znajdujemy maksymalny element
-            if (abs(A[i][k]) > max_val) {
-                max_val = abs(A[i][k]);
-                max_row = i;
-            }
-        }
-
-        if (max_row != k) {//zamieniamy wiersze jesli trzeba
-            swap(A[k], A[max_row]);
-            swap(pivot[k], pivot[max_row]);
-        }
-
-        for (int i = k + 1; i < n; ++i) { //eliminacja gaussa
-            A[i][k] /= A[k][k]; //obliczamy mnoznik
-            for (int j = k + 1; j < n; ++j) {
-                A[i][j] -= A[i][k] * A[k][j];//aktualizujemy podmacierz
-            }
-        }
-    }
-}
-
-vector<double> SolveWithLU(const vector<vector<double>>& LU, const vector<int>& pivot, const vector<double>& b) {
-    int n = LU.size();
-    vector<double> x(n), y(n);
-
-    vector<double> pb(n);
-    for (int i = 0; i < n; ++i) {
-        pb[i] = b[pivot[i]];//permutacja wektora b
-    }
+// Interpolacja Lagrangea 
+double lagrange_interpolacja(const vector<double>& wezly, const vector<double>& wartosci, double x) {
+    double wynik = 0.0;
+    int n = wezly.size();
 
     for (int i = 0; i < n; ++i) {
-        y[i] = pb[i];
-        for (int j = 0; j < i; ++j) {//Ly = pb
-            y[i] -= LU[i][j] * y[j];
+        // Jeśli x pokrywa się dokładnie z którymś z węzłów, zwracamy jego wartość
+        if (fabs(x - wezly[i]) < 1e-12) {
+            return wartosci[i];
         }
+
+        // Liczenie wielomianu Lagrange’a
+        double li = 1.0;
+        for (int j = 0; j < n; ++j) {
+            if (j != i) {
+                li *= (x - wezly[j]) / (wezly[i] - wezly[j]);
+            }
+        }
+        wynik += wartosci[i] * li;
     }
 
-    for (int i = n - 1; i >= 0; --i) {
-        x[i] = y[i];
-        for (int j = i + 1; j < n; ++j) {//Ux = y
-            x[i] -= LU[i][j] * x[j];
-        }
-        x[i] /= LU[i][i];
-    }
-
-    return x;
-}
-
-void extractLandU(const vector<vector<double>>& LU, vector<vector<double>>& L, vector<vector<double>>& U) {
-    int n = LU.size();
-    L.assign(n, vector<double>(n, 0.0));
-    U.assign(n, vector<double>(n, 0.0));
-
-    for (int i = 0; i < n; ++i) { //rozdziela macierz na L i U
-        L[i][i] = 1.0;
-        for (int j = 0; j < i; ++j) {
-            L[i][j] = LU[i][j];
-        }
-        for (int j = i; j < n; ++j) {
-            U[i][j] = LU[i][j];
-        }
-    }
+    return wynik;
 }
 
 int main() {
-    cout << fixed;
+    // Zakres interpolacji
+    const double a = -1.0;
+    const double b = 1.0;
 
-    // Dane wejściowe z przykładu
-    vector<vector<double>> A = {
-        {5, 4, 3, 2, 1},
-        {10, 8, 7, 6, 5},
-        {-1, 2, -3, 4, -5},
-        {6, 5, -4, 3, -2},
-        {1, 2, 3, 4, 5}
-    };
+    // Liczba węzłów (n+1 punktów)
+    const int n = 10;
 
-    vector<double> b = { 37, 99, -9, 12, 53 };
+    // Liczba punktów do wyświetlenia na konsoli
+    const int liczba_punktow = 11;
 
-    vector<vector<double>> A_copy = A;
-    vector<double> b_copy = b;
+    // Generujemy węzły i obliczamy wartości funkcji f(x) w tych węzłach
+    auto wezly_rown = rownoodlegle_wezly(n, a, b);
+    auto wezly_czeb = czebyszew_wezly(n, a, b);
 
-        cout << "ROZWIAZANIE ===" << endl;
-        printMatrix(A, "MATRIX A");
-        printVector(b, "VECTOR B");
+    vector<double> wartosci_rown, wartosci_czeb;
+    for (auto x : wezly_rown) wartosci_rown.push_back(f(x));
+    for (auto x : wezly_czeb) wartosci_czeb.push_back(f(x));
 
-        vector<int> pivot;
-        LUDecompositionWithPartialPivoting(A, pivot);
+    cout << "x\tf(x)\tRównoodległe\tCzebyszew\n";
+    cout << fixed << setprecision(6);
 
-        vector<vector<double>> L, U;
-        extractLandU(A, L, U);
+    // Wyświetlanie wyników interpolacji w równych odstępach (11 punktów)
+    for (int i = 0; i < liczba_punktow; ++i) {
+        double x = a + i * (b - a) / (liczba_punktow - 1); // Równe odstępy
+        double y_f = f(x);
+        double y_rown = lagrange_interpolacja(wezly_rown, wartosci_rown, x);
+        double y_czeb = lagrange_interpolacja(wezly_czeb, wartosci_czeb, x);
 
-        printMatrix(L, "MATRIX L");
-        printMatrix(U, "MATRIX U");
+        cout << x << "\t" << y_f << "\t" << y_rown << "\t";
 
-        cout << "--- PERMUTATION VECTOR ---" << endl;
-        for (int val : pivot) {
-            cout << setw(10) << val;
-        }
+        // Zabezpieczenie przed NaN/Inf w Czebyszewie
+        if (isnormal(y_czeb) || y_czeb == 0) cout << y_czeb;
+        else cout << "N/A";
+
         cout << endl;
+    }
 
-        vector<double> y = SolveWithLU(A, pivot, b_copy);
-        printVector(y, "VECTOR Y");
+    ofstream f_dane("dane.txt");  // funkcja f(x)
+    ofstream f_rown("rown.txt");  // interpolacja z węzłami równoodległymi
+    ofstream f_czeb("czeb.txt");  // interpolacja z węzłami Czebyszewa
 
-        vector<double> x = SolveWithLU(A, pivot, b_copy);
-        printVector(x, "VECTOR X");
+    for (int i = 0; i < liczba_punktow * 10; ++i) {
+        double x = a + i * (b - a) / (liczba_punktow * 10 - 1);
+        f_dane << x << " " << f(x) << endl;
+        f_rown << x << " " << lagrange_interpolacja(wezly_rown, wartosci_rown, x) << endl;
+        f_czeb << x << " " << lagrange_interpolacja(wezly_czeb, wartosci_czeb, x) << endl;
+    }
+
+    f_dane.close();
+    f_rown.close();
+    f_czeb.close();
 
     return 0;
 }
